@@ -33,14 +33,14 @@ dishRouter.route('/')
 .get((req,res,next) => {
     Dishes.find({})
     .populate('comments.author')
-    .then((dishes) => {
-        res.statusCode = 200;
-        res.setHeader('Content-Type', 'application/json');
-        res.json(dishes);
-    }, (err) => next(err))
-    .catch((err) => next(err));
+  .then((dishes) => {
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json');
+      res.json(dishes);
+  }, (err) => next(err))
+  .catch((err) => next(err));
 })
-.post(authenticate.verifyUser,(req, res, next) => {
+.post(authenticate.verifyUser,authenticate.verifyAdmin,(req, res, next) => {
     Dishes.create(req.body)
     .then((dish) => {
         console.log('Dish Created ', dish);
@@ -50,12 +50,12 @@ dishRouter.route('/')
     }, (err) => next(err))
     .catch((err) => next(err));
 })
-.put(authenticate.verifyUser,(req, res, next) => {
+.put(authenticate.verifyUser,authenticate.verifyAdmin,(req, res, next) => {
     res.statusCode = 403;
     res.end('PUT operation not supported on /dishes');
 })
 
-.delete(authenticate.verifyUser,(req, res, next) => {
+.delete(authenticate.verifyUser,authenticate.verifyAdmin,(req, res, next) => {
     Dishes.remove({})
     .then((resp) => {
         res.statusCode = 200;
@@ -107,11 +107,11 @@ dishRouter.route('/:dishId')
     }, (err) => next(err))
     .catch((err) => next(err));
 })
-.post(authenticate.verifyUser,(req, res, next) => {
+.post(authenticate.verifyUser,authenticate.verifyAdmin,(req, res, next) => {
     res.statusCode = 403;
     res.end('POST operation not supported on /dishes/'+ req.params.dishId);
 })
-.put(authenticate.verifyUser,(req, res, next) => {
+.put(authenticate.verifyUser,authenticate.verifyAdmin,(req, res, next) => {
     Dishes.findByIdAndUpdate(req.params.dishId, {
         $set: req.body
     }, { new: true })
@@ -123,7 +123,7 @@ dishRouter.route('/:dishId')
     .catch((err) => next(err));
 })
 
-.delete(authenticate.verifyUser,(req, res, next) => {
+.delete(authenticate.verifyUser,authenticate.verifyAdmin,(req, res, next) => {
     Dishes.findByIdAndRemove(req.params.dishId)
     .then((resp) => {
         res.statusCode = 200;
@@ -184,7 +184,7 @@ dishRouter.route('/:dishId/comments')
     res.end('PUT operation not supported on /dishes/'
         + req.params.dishId + '/comments');
 })
-.delete(authenticate.verifyUser,(req, res, next) => {
+.delete(authenticate.verifyUser,authenticate.verifyAdmin,(req, res, next) => {
     Dishes.findById(req.params.dishId)
     .then((dish) => {
         if (dish != null) {
@@ -238,14 +238,34 @@ dishRouter.route('/:dishId/comments/:commentId')
 .put(authenticate.verifyUser,(req, res, next) => {
     Dishes.findById(req.params.dishId)
     .then((dish) => {
+        const comment = dish.comments.id(req.params.commentId);
+          const commentAuthorId = comment.author;
+          const currentUserId = req.user._id;
+          if (!commentAuthorId.equals(currentUserId)) {
+            err = new Error("You haven't permissions for edit comment " + req.params.commentId);
+            err.status = 403;
+            return next(err);
+          }
+          if (dish != null && comment != null) {
+            if (req.body.rating) {
+              
+              comment.rating = req.body.rating;
+            }
 
-        if (dish != null && dish.comments.id(req.params.commentId) != null) {
+            if (req.body.comment) {
+              
+              comment.comment = req.body.comment;
+            }
+
+
+
+        /*if (dish != null && dish.comments.id(req.params.commentId) != null) {
             if (req.body.rating) {
                 dish.comments.id(req.params.commentId).rating = req.body.rating;
             }
             if (req.body.comment) {
                 dish.comments.id(req.params.commentId).comment = req.body.comment;                
-            }
+            }*/
             dish.save()
             .then((dish) => {
                 Dishes.findById(dish._id)
@@ -275,8 +295,18 @@ dishRouter.route('/:dishId/comments/:commentId')
 .delete(authenticate.verifyUser,(req, res, next) => {
     Dishes.findById(req.params.dishId)
     .then((dish) => {
-        if (dish != null && dish.comments.id(req.params.commentId) != null) {
-            dish.comments.id(req.params.commentId).remove();
+        /*if (dish != null && dish.comments.id(req.params.commentId) != null) {
+            dish.comments.id(req.params.commentId).remove();*/
+          const comment = dish.comments.id(req.params.commentId);
+          const commentAuthorId = comment.author;
+          const currentUserId = req.user._id;
+          if (!commentAuthorId.equals(currentUserId)) {
+            err = new Error("You haven't permissions for edit comment " + req.params.commentId);
+            err.status = 403;
+            return next(err);
+          }
+          if (dish != null && comment != null) {
+            comment.remove();
             dish.save()
             .then((dish) => {
                 Dishes.findById(dish._id)
